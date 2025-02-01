@@ -113,7 +113,7 @@ def write_dataframe_to_postgres(
       case_type:
           The case type to pass to pyjanitors' `clean_names` method (default is "snake").
       truncate_limit:
-          The truncate limit to pass to pyjanitors' `clean_names` method (default is 55).
+          The truncate limit to pass to pyjanitors `clean_names` method (default is 55).
 
     Raises:
       ValueError: If write_method is invalid, if chunksize is invalid, if a Polars
@@ -235,11 +235,13 @@ def write_dataframe_to_postgres(
     # --- Create the SQLAlchemy Table object and update (or create) the schema in Postgres ---
     metadata = MetaData()
     table = Table(table_name, metadata, *table_columns)
+    print(table.name, table.columns)
 
     with engine.connect() as conn:
         inspector = sa.inspect(conn)
         if not inspector.has_table(table_name):
-            metadata.create_all(conn, tables=[table])
+            print(f"Creating table '{table_name}' in the database.")
+            metadata.create_all(engine, tables=[table])
         else:
             # Determine which columns exist in the table.
             existing_columns = {col_info["name"] for col_info in inspector.get_columns(table_name)}

@@ -8,7 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy import text
 
 # Import the function to be tested. Adjust the import to match your module/package name.
-from dataframe_to_pg.main import write_dataframe_to_postgres
+from dataframe_to_pg.writer import write_dataframe_to_postgres
 
 
 # A pytest fixture to create a SQLAlchemy engine connected to a test database.
