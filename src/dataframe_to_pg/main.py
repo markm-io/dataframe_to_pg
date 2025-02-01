@@ -69,6 +69,9 @@ def write_dataframe_to_postgres(
     write_method: str = "upsert",
     chunksize: Optional[Union[int, str]] = None,
     index: Optional[Union[str, list[str]]] = None,
+    clean_column_names: bool = False,
+    case_type: str = "snake",
+    truncate_limit: int = 55,
 ) -> None:
     """
     Write a DataFrame to a PostgreSQL table with conflict resolution,
@@ -104,15 +107,36 @@ def write_dataframe_to_postgres(
           Optional parameter specifying the primary key column(s). For pandas DataFrames,
           if not provided, the DataFrame's index (or MultiIndex) is used. For Polars DataFrames,
           this parameter is required and must be a string or list of strings specifying the primary key column(s).
+      clean_column_names:
+          If True, the DataFrame's column names will be cleaned using pyjanitors' `clean_names`
+          method.
+      case_type:
+          The case type to pass to pyjanitors' `clean_names` method (default is "snake").
+      truncate_limit:
+          The truncate limit to pass to pyjanitors' `clean_names` method (default is 55).
 
     Raises:
-      ValueError: If write_method is invalid, if chunksize is invalid, or if a Polars
-                  DataFrame is passed without specifying the index parameter.
+      ValueError: If write_method is invalid, if chunksize is invalid, if a Polars
+                  DataFrame is passed without specifying the index parameter, or if
+                  column cleaning is requested but not supported.
     """
 
     allowed_methods = ["insert", "replace", "upsert"]
     if write_method not in allowed_methods:
         raise ValueError(f"write_method must be one of {allowed_methods}, got {write_method}")
+
+    # --- Clean column names if requested using pyjanitors ---
+    if clean_column_names:
+        try:
+            # This assumes that the DataFrame has the `clean_names` method (pyjanitor must be installed).
+            df = df.clean_names(case_type=case_type, truncate=truncate_limit)
+        except AttributeError as e:
+            raise ValueError(
+                "clean_column_names requested but the DataFrame does not support clean_names. "
+                "Please ensure pyjanitors is installed and up-to-date."
+            ) from e
+        except Exception as e:
+            raise ValueError("Error cleaning column names using pyjanitors: " + str(e)) from e
 
     # --- Determine DataFrame type via module name ---
     module_name = type(df).__module__
