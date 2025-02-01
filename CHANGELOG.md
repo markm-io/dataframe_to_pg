@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.0.2 (2025-02-01)
+
+### Bug fixes
+
+- Correction to table creation to use the engine instead of the connection ([`26ed491`](https://github.com/markm-io/dataframe_to_pg/commit/26ed491653e8e975af2e4c36b5bf6ec5640f97b7))
+
 ## v0.0.1 (2025-02-01)
 
 ### Bug fixes
