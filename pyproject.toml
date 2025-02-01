@@ -26,6 +26,10 @@ classifiers = [
 ]
 
 dependencies = [
+    "pandas>=2.2.3",
+    "polars>=1.21.0",
+    "psycopg2-binary>=2.9.10",
+    "sqlalchemy>=2.0.37",
 ]
 urls."Bug Tracker" = "https://github.com/markm-io/dataframe-to-pg/issues"
 urls.Changelog = "https://github.com/markm-io/dataframe-to-pg/blob/main/CHANGELOG.md"

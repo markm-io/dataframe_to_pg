@@ -60,8 +60,8 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: []
-  #  - repo: https://github.com/pre-commit/mirrors-mypy
-  #    rev: v1.14.1
-  #    hooks:
-  #      - id: mypy
-  #        additional_dependencies: []
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        additional_dependencies: []
