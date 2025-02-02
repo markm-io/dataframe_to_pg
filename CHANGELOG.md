@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.0 (2025-02-02)
+
+### Features
+
+- Add yield_chunks parameter to control chunked processing of records (#4) ([`835ff2f`](https://github.com/markm-io/dataframe_to_pg/commit/835ff2f7d99d001fe73aac3bdb19997fcf359001))
+
 ## v0.0.2 (2025-02-01)
 
 ### Bug fixes
