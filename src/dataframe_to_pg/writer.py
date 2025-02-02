@@ -1,4 +1,5 @@
 import math
+from collections.abc import Generator
 from typing import Any, Optional, Union
 
 import numpy as np
@@ -72,13 +73,16 @@ def write_dataframe_to_postgres(
     clean_column_names: bool = False,
     case_type: str = "snake",
     truncate_limit: int = 55,
-) -> None:
+    yield_chunks: bool = False,  # <-- New parameter added to control yielding chunks.
+) -> Union[None, Generator[list[dict[str, Any]], None, int]]:
     """
     Write a DataFrame to a PostgreSQL table with conflict resolution,
     automatic addition of missing columns, optional processing in chunks,
     and support for a custom primary key.
 
-    This function supports both pandas and Polars DataFrames.
+    If 'yield_chunks' is True, the function will yield each chunk of records as it is written
+    to the database and, upon completion, will return the number of non-primary key columns updated (i.e. the count
+    of non-primary key columns updated in conflict handling). Otherwise, the function executes normally.
 
     Parameters:
       df:
@@ -114,6 +118,10 @@ def write_dataframe_to_postgres(
           The case type to pass to pyjanitors' `clean_names` method (default is "snake").
       truncate_limit:
           The truncate limit to pass to pyjanitors `clean_names` method (default is 55).
+      yield_chunks:
+          If True, yields each chunk as it is written to the database and returns the number
+          of non-primary key columns updated (via the generator's return value).
+          Otherwise, the function behaves as before and returns None.
 
     Raises:
       ValueError: If write_method is invalid, if chunksize is invalid, if a Polars
@@ -272,25 +280,46 @@ def write_dataframe_to_postgres(
             },
         )
 
+    # Compute the number of non-primary key columns updated (only applicable for 'replace' and 'upsert').
+    updated_columns_count = (
+        len([col for col in table.columns if col.name not in pk_names]) if write_method in ["replace", "upsert"] else 0
+    )
+
     # --- Execute the INSERT statement, processing records in chunks if requested ---
-    with engine.begin() as conn:
-        if chunksize is not None:
-            # Validate and/or compute chunksize.
-            if isinstance(chunksize, str):
-                if chunksize.lower() == "auto":
-                    computed_chunksize = math.floor(30000 / (len(records[0]) if records else 1))
-                    chunksize = max(1, computed_chunksize)
-                else:
-                    raise ValueError("chunksize must be a positive integer or 'auto'")
-            elif isinstance(chunksize, int):
-                if chunksize <= 0:
-                    raise ValueError("chunksize must be greater than 0")
+    # Factor out common code by computing the list of chunks first.
+    if chunksize is not None:
+        if isinstance(chunksize, str):
+            if chunksize.lower() == "auto":
+                computed_chunksize = math.floor(30000 / (len(records[0]) if records else 1))
+                chunksize = max(1, computed_chunksize)
             else:
                 raise ValueError("chunksize must be a positive integer or 'auto'")
-
-            # Process the records in chunks.
-            for i in range(0, len(records), chunksize):
-                chunk: list[dict[str, Any]] = records[i : i + chunksize]
-                conn.execute(stmt, chunk)
+        elif isinstance(chunksize, int):
+            if chunksize <= 0:
+                raise ValueError("chunksize must be greater than 0")
         else:
-            conn.execute(stmt, records)
+            raise ValueError("chunksize must be a positive integer or 'auto'")
+        chunks = [records[i : i + chunksize] for i in range(0, len(records), chunksize)]
+    else:
+        chunks = [records]
+
+    # Define an inner function that processes the chunks.
+    def _process_chunks(yield_results: bool) -> Generator[list[dict[str, Any]], None, None]:
+        with engine.begin() as conn:
+            for chunk in chunks:
+                conn.execute(stmt, chunk)
+                if yield_results:
+                    yield chunk
+
+    # Use the inner function to execute the chunks.
+    if yield_chunks:
+
+        def _generator() -> Generator[list[dict[str, Any]], None, int]:
+            yield from _process_chunks(True)
+            return updated_columns_count  # Returned via StopIteration.value
+
+        return _generator()
+    else:
+        # Execute all chunks without yielding.
+        list(_process_chunks(False))
+        return None
