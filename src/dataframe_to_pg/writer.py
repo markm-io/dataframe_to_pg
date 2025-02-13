@@ -133,6 +133,19 @@ def write_dataframe_to_postgres(
     if write_method not in allowed_methods:
         raise ValueError(f"write_method must be one of {allowed_methods}, got {write_method}")
 
+    # --- Determine DataFrame type via module name ---
+    module_name = type(df).__module__
+    if "polars" in module_name:
+        import janitor.polars
+
+        is_polars = True
+    elif "pandas" in module_name:
+        import janitor  # noqa
+
+        is_polars = False
+    else:
+        raise ValueError("df must be either a pandas.DataFrame or a polars.DataFrame")
+
     # --- Clean column names if requested using pyjanitors ---
     if clean_column_names:
         try:
@@ -145,15 +158,6 @@ def write_dataframe_to_postgres(
             ) from e
         except Exception as e:
             raise ValueError("Error cleaning column names using pyjanitors: " + str(e)) from e
-
-    # --- Determine DataFrame type via module name ---
-    module_name = type(df).__module__
-    if "polars" in module_name:
-        is_polars = True
-    elif "pandas" in module_name:
-        is_polars = False
-    else:
-        raise ValueError("df must be either a pandas.DataFrame or a polars.DataFrame")
 
     # --- Determine primary key columns and prepare records accordingly ---
     pk_names: list[str] = []
