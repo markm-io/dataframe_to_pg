@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.8 (2025-02-13)
+
+### Bug fixes
+
+- Remove debug print statement for table name and columns in writer.py ([`38eaf4c`](https://github.com/markm-io/dataframe_to_pg/commit/38eaf4c44443b10d3ce06295fa4542ceffa3124c))
+
 ## v0.1.7 (2025-02-13)
 
 ### Bug fixes
