@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.7 (2025-02-13)
+
+### Bug fixes
+
+- Enhance type determination for pandas datetimetzdtype and streamline dataframe processing ([`aa46478`](https://github.com/markm-io/dataframe_to_pg/commit/aa46478f314c31df9a9b8914e2a17b0e22140693))
+
 ## v0.1.6 (2025-02-13)
 
 ### Bug fixes
