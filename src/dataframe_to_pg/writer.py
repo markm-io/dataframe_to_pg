@@ -32,12 +32,12 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
     This mapping can be expanded as needed.
     """
     dt = series.dtype
-    if isinstance(dt, pd.Int64Dtype):
-        return sa.BigInteger
-    elif isinstance(dt, pd.DatetimeTZDtype):
+    if isinstance(dt, pd.DatetimeTZDtype):
         return sa.DateTime(timezone=True)
     elif np.issubdtype(dt, np.datetime64):
         return sa.DateTime
+    if isinstance(dt, pd.Int64Dtype):
+        return sa.BigInteger
     elif np.issubdtype(dt, np.integer):
         return sa.Integer
     elif np.issubdtype(dt, np.floating):
