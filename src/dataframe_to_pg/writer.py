@@ -19,16 +19,16 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
     dt = series.dtype
     if isinstance(dt, pd.Int64Dtype):
         return sa.BigInteger
-    if np.issubdtype(dt, np.integer):
+    elif isinstance(dt, pd.DatetimeTZDtype):
+        return sa.DateTime(timezone=True)
+    elif np.issubdtype(dt, np.datetime64):
+        return sa.DateTime
+    elif np.issubdtype(dt, np.integer):
         return sa.Integer
     elif np.issubdtype(dt, np.floating):
         return sa.Float
-    elif np.issubdtype(dt, np.datetime64):
-        return sa.DateTime
     elif np.issubdtype(dt, np.bool_):
         return sa.Boolean
-    elif isinstance(dt, pd.DatetimeTZDtype):
-        return sa.DateTime
     else:
         return sa.Text
 
@@ -85,8 +85,8 @@ def write_dataframe_to_postgres(
     and support for a custom primary key.
 
     If 'yield_chunks' is True, the function will yield each chunk of records as it is written
-    to the database and, upon completion, will return the number of non-primary key columns updated (i.e. the count
-    of non-primary key columns updated in conflict handling). Otherwise, the function executes normally.
+    to the database and, upon completion, will return the number of non-primary key columns updated.
+    Otherwise, the function executes normally.
 
     Parameters:
       df:
@@ -104,20 +104,16 @@ def write_dataframe_to_postgres(
             - 'replace': Insert rows; if the primary key(s) already exist, update every
                          non-key column with the new value.
             - 'upsert':  Insert rows; if the primary key(s) already exist, update only those
-                         non-key columns whose new value is not null (leaving existing values
-                         intact when the new value is null).
+                         non-key columns whose new value is not null.
       chunksize:
           Either None, a positive integer, or the string "auto". If provided, the data
-          will be processed in chunks. When set to "auto", the chunksize is computed as:
-              math.floor(30000 / number_of_columns)
-          (ensuring the computed chunksize is at least 1).
+          will be processed in chunks.
       index:
           Optional parameter specifying the primary key column(s). For pandas DataFrames,
           if not provided, the DataFrame's index (or MultiIndex) is used. For Polars DataFrames,
-          this parameter is required and must be a string or list of strings specifying the primary key column(s).
+          this parameter is required.
       clean_column_names:
-          If True, the DataFrame's column names will be cleaned using pyjanitors' `clean_names`
-          method.
+          If True, the DataFrame's column names will be cleaned using pyjanitors' `clean_names` method.
       case_type:
           The case type to pass to pyjanitors' `clean_names` method (default is "snake").
       truncate_limit:
@@ -203,7 +199,6 @@ def write_dataframe_to_postgres(
                 col_type = _infer_sqlalchemy_type_from_polars_dtype(schema[col])
             table_columns.append(Column(col, col_type))
 
-        # Convert the Polars DataFrame to a list of dictionaries.
         records = df.to_dicts()
 
     else:
@@ -226,7 +221,9 @@ def write_dataframe_to_postgres(
                 pk_names = [df.index.name if df.index.name is not None else "index"]
             df = df.reset_index(drop=False)
 
-        # Build table columns: primary key columns first (in the order specified), then the others.
+        # Replace NaT with None using the replace method.
+        df = df.replace({pd.NaT: None})
+
         table_columns = []
         for col_name in pk_names:
             if dtypes is not None and col_name in dtypes:
