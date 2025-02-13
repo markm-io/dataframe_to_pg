@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.2 (2025-02-13)
+
+### Bug fixes
+
+- Streamline dataframe type determination and clean column names logic ([`ec13b76`](https://github.com/markm-io/dataframe_to_pg/commit/ec13b765d55ae30e21f6464888893f860e9e2968))
+
 ## v0.1.1 (2025-02-13)
 
 ### Bug fixes
