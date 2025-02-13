@@ -1,5 +1,6 @@
 import math
 from collections.abc import Generator
+from dataclasses import dataclass
 from typing import Any, Optional, Union
 
 import numpy as np
@@ -9,6 +10,20 @@ import sqlalchemy as sa
 from sqlalchemy import Column, MetaData, Table, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
+
+
+@dataclass
+class WriteResult:
+    """
+    Dataclass to encapsulate the result of writing a DataFrame to PostgreSQL.
+
+    Attributes:
+        updated_columns_count: Number of non-primary key columns updated (only applicable for 'replace' and 'upsert').
+        column: The list of column names after cleaning (only provided if clean_column_names=True).
+    """
+
+    updated_columns_count: int
+    column: list[str]
 
 
 def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
@@ -77,16 +92,13 @@ def write_dataframe_to_postgres(
     clean_column_names: bool = False,
     case_type: str = "snake",
     truncate_limit: int = 55,
-    yield_chunks: bool = False,  # <-- New parameter added to control yielding chunks.
-) -> Union[None, Generator[list[dict[str, Any]], None, int]]:
+    yield_chunks: bool = False,  # <-- If True, yields each chunk as it's written.
+) -> Union[None, WriteResult, Generator[list[dict[str, Any]], None, Union[WriteResult, int]]]:
     """
     Write a DataFrame to a PostgreSQL table with conflict resolution,
     automatic addition of missing columns, optional processing in chunks,
-    and support for a custom primary key.
-
-    If 'yield_chunks' is True, the function will yield each chunk of records as it is written
-    to the database and, upon completion, will return the number of non-primary key columns updated.
-    Otherwise, the function executes normally.
+    and support for a custom primary key. Additionally, if clean_column_names is True,
+    returns an object with the cleaned column names.
 
     Parameters:
       df:
@@ -113,15 +125,24 @@ def write_dataframe_to_postgres(
           if not provided, the DataFrame's index (or MultiIndex) is used. For Polars DataFrames,
           this parameter is required.
       clean_column_names:
-          If True, the DataFrame's column names will be cleaned using pyjanitors' `clean_names` method.
+          If True, the DataFrame's column names will be cleaned using pyjanitors' `clean_names`
+          method and the resulting column names will be returned in the WriteResult object.
       case_type:
           The case type to pass to pyjanitors' `clean_names` method (default is "snake").
       truncate_limit:
           The truncate limit to pass to pyjanitors `clean_names` method (default is 55).
       yield_chunks:
-          If True, yields each chunk as it is written to the database and returns the number
-          of non-primary key columns updated (via the generator's return value).
-          Otherwise, the function behaves as before and returns None.
+          If True, yields each chunk as it is written to the database and returns, via the
+          generator's return value, a WriteResult (if clean_column_names is True) or the number
+          of non-primary key columns updated. Otherwise, the function executes all chunks and,
+          if clean_column_names is True, returns a WriteResult object; if False, returns None.
+
+    Returns:
+      - If yield_chunks is True, yields each chunk (as a list of dicts) and finally returns a
+        WriteResult (if clean_column_names=True) or an int representing the updated columns count.
+      - If yield_chunks is False and clean_column_names is True, returns a WriteResult object
+        with the updated_columns_count and the cleaned column names (accessible via `.column`).
+      - Otherwise, returns None.
 
     Raises:
       ValueError: If write_method is invalid, if chunksize is invalid, if a Polars
@@ -151,13 +172,17 @@ def write_dataframe_to_postgres(
         try:
             # This assumes that the DataFrame has the `clean_names` method (pyjanitor must be installed).
             df = df.clean_names(case_type=case_type, truncate_limit=truncate_limit)
+            # Capture the cleaned column names.
+            cleaned_columns = list(df.columns)
         except AttributeError as e:
             raise ValueError(
                 "clean_column_names requested but the DataFrame does not support clean_names. "
-                "Please ensure pyjanitors is installed and up-to-date."
+                "Please ensure pyjanitor is installed and up-to-date."
             ) from e
         except Exception as e:
             raise ValueError("Error cleaning column names using pyjanitors: " + str(e)) from e
+    else:
+        cleaned_columns = None
 
     # --- Determine primary key columns and prepare records accordingly ---
     pk_names: list[str] = []
@@ -290,7 +315,6 @@ def write_dataframe_to_postgres(
     )
 
     # --- Execute the INSERT statement, processing records in chunks if requested ---
-    # Factor out common code by computing the list of chunks first.
     if chunksize is not None:
         if isinstance(chunksize, str):
             if chunksize.lower() == "auto":
@@ -315,15 +339,21 @@ def write_dataframe_to_postgres(
                 if yield_results:
                     yield chunk
 
-    # Use the inner function to execute the chunks.
+    # --- Execute the chunks and return the final result ---
     if yield_chunks:
 
-        def _generator() -> Generator[list[dict[str, Any]], None, int]:
+        def _generator() -> Generator[list[dict[str, Any]], None, Union[WriteResult, int]]:
             yield from _process_chunks(True)
-            return updated_columns_count  # Returned via StopIteration.value
+            # If clean_column_names was requested, return a WriteResult so that .column is available.
+            return (
+                WriteResult(updated_columns_count, cleaned_columns or [])
+                if clean_column_names
+                else updated_columns_count
+            )
 
         return _generator()
     else:
         # Execute all chunks without yielding.
         list(_process_chunks(False))
-        return None
+        # Return a WriteResult if clean_column_names is True, otherwise behave as before.
+        return WriteResult(updated_columns_count, cleaned_columns or [])
