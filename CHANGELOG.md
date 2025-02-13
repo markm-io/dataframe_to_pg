@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.9 (2025-02-13)
+
+### Bug fixes
+
+- Add writeresult dataclass to encapsulate dataframe write results and enhance yield_chunks functionality ([`4771974`](https://github.com/markm-io/dataframe_to_pg/commit/47719741978100515e2c1e02ef7c315d3b1f7586))
+
 ## v0.1.8 (2025-02-13)
 
 ### Bug fixes
