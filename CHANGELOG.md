@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.6 (2025-02-13)
+
+### Bug fixes
+
+- Add support for pandas datetimetzdtype in type determination for dataframe writer ([`2977326`](https://github.com/markm-io/dataframe_to_pg/commit/297732631d9a2a7e2e306d74751e306196983874))
+
 ## v0.1.5 (2025-02-13)
 
 ### Bug fixes
