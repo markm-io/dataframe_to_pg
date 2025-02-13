@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.11 (2025-02-13)
+
+### Bug fixes
+
+- Reorder type determination for pandas datetimetzdtype and int64dtype in writer.py ([`e17ede8`](https://github.com/markm-io/dataframe_to_pg/commit/e17ede81a2e507f02847f07fedd736b40aa87ec3))
+
 ## v0.1.10 (2025-02-13)
 
 ### Bug fixes
