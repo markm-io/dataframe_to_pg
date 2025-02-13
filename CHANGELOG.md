@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.12 (2025-02-13)
+
+### Bug fixes
+
+- Update type determination for int64dtype in writer.py to use is_integer_dtype ([`862df90`](https://github.com/markm-io/dataframe_to_pg/commit/862df9051a0ef945a4b33287a27183af2015b558))
+
 ## v0.1.11 (2025-02-13)
 
 ### Bug fixes
