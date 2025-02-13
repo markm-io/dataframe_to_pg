@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.13 (2025-02-13)
+
+### Bug fixes
+
+- Add support for json type columns in type determination in writer.py ([`c229c2a`](https://github.com/markm-io/dataframe_to_pg/commit/c229c2ad6d3e34c401058e401003208b3cf9d1c5))
+
 ## v0.1.12 (2025-02-13)
 
 ### Bug fixes
