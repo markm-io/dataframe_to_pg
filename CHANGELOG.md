@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.1 (2025-02-13)
+
+### Bug fixes
+
+- Update package versions in lock file and add janitor for name cleaning ([`78bb3c9`](https://github.com/markm-io/dataframe_to_pg/commit/78bb3c9b6b2a0f2ce3b0afe0e4ef4f075179f2a2))
+
 ## v0.1.0 (2025-02-02)
 
 ### Features
