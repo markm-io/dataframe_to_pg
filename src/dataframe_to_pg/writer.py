@@ -36,7 +36,7 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
         return sa.DateTime(timezone=True)
     elif np.issubdtype(dt, np.datetime64):
         return sa.DateTime
-    if isinstance(dt, pd.Int64Dtype):
+    elif pd.api.types.is_integer_dtype(dt):
         return sa.BigInteger
     elif np.issubdtype(dt, np.integer):
         return sa.Integer
