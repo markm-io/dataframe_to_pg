@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.4 (2025-02-13)
+
+### Bug fixes
+
+- Enhance type determination to support pandas int64dtype in dataframe writer ([`6a71f3e`](https://github.com/markm-io/dataframe_to_pg/commit/6a71f3e0055a8a671e688a00cb5b36b63122a50a))
+
 ## v0.1.3 (2025-02-13)
 
 ### Bug fixes
