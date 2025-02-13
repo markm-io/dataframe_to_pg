@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.3 (2025-02-13)
+
+### Bug fixes
+
+- Correct argument name for truncate limit in clean_names method ([`784fefd`](https://github.com/markm-io/dataframe_to_pg/commit/784fefd13df850f37e91b06f406a032485bd0c47))
+
 ## v0.1.2 (2025-02-13)
 
 ### Bug fixes
