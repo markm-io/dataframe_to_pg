@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.10 (2025-02-13)
+
+### Bug fixes
+
+- Correct attribute name from 'column' to 'columns' in writeresult dataclass ([`c4cb5a2`](https://github.com/markm-io/dataframe_to_pg/commit/c4cb5a2e62cd3df16840444d7de1aea30864fff8))
+
 ## v0.1.9 (2025-02-13)
 
 ### Bug fixes
