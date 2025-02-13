@@ -17,7 +17,7 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
     This mapping can be expanded as needed.
     """
     dt = series.dtype
-    if np.issubdtype(dt, np.integer):
+    if np.issubdtype(dt, np.integer) or isinstance(dt, pd.Int64Dtype):
         return sa.Integer
     elif np.issubdtype(dt, np.floating):
         return sa.Float
