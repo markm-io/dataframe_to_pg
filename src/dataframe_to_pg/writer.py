@@ -150,7 +150,7 @@ def write_dataframe_to_postgres(
     if clean_column_names:
         try:
             # This assumes that the DataFrame has the `clean_names` method (pyjanitor must be installed).
-            df = df.clean_names(case_type=case_type, truncate=truncate_limit)
+            df = df.clean_names(case_type=case_type, truncate_limit=truncate_limit)
         except AttributeError as e:
             raise ValueError(
                 "clean_column_names requested but the DataFrame does not support clean_names. "
