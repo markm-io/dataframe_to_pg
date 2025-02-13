@@ -19,11 +19,11 @@ class WriteResult:
 
     Attributes:
         updated_columns_count: Number of non-primary key columns updated (only applicable for 'replace' and 'upsert').
-        column: The list of column names after cleaning (only provided if clean_column_names=True).
+        columns: The list of column names after cleaning (only provided if clean_column_names=True).
     """
 
     updated_columns_count: int
-    column: list[str]
+    columns: list[str]
 
 
 def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
