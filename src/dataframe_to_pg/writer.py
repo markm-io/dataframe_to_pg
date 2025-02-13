@@ -248,7 +248,6 @@ def write_dataframe_to_postgres(
     # --- Create the SQLAlchemy Table object and update (or create) the schema in Postgres ---
     metadata = MetaData()
     table = Table(table_name, metadata, *table_columns)
-    print(table.name, table.columns)
 
     with engine.connect() as conn:
         inspector = sa.inspect(conn)
