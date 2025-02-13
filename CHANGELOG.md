@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.5 (2025-02-13)
+
+### Bug fixes
+
+- Refine type determination for pandas int64dtype in dataframe writer ([`3713345`](https://github.com/markm-io/dataframe_to_pg/commit/371334578c2e745c67aaed4c6dab86f33d208110))
+
 ## v0.1.4 (2025-02-13)
 
 ### Bug fixes
