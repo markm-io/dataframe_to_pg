@@ -8,7 +8,7 @@ import pandas as pd
 import polars as pl
 import sqlalchemy as sa
 from sqlalchemy import Column, MetaData, Table, text
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import JSON, insert
 from sqlalchemy.engine import Engine
 
 
@@ -44,6 +44,8 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
         return sa.Float
     elif np.issubdtype(dt, np.bool_):
         return sa.Boolean
+    elif np.issubdtype(dt, np.object_) and series.apply(lambda x: isinstance(x, dict)).any():
+        return JSON  # Handle JSON type columns
     else:
         return sa.Text
 
@@ -77,6 +79,9 @@ def _infer_sqlalchemy_type_from_polars_dtype(pl_dtype: Any) -> type[sa.types.Typ
     # Utf8 (string) type
     elif pl_dtype == pl.Utf8:
         return sa.Text
+    # Object type (assumed to be JSON)
+    elif pl_dtype == pl.Object:
+        return JSON  # Handle JSON type columns
     else:
         return sa.Text
 
