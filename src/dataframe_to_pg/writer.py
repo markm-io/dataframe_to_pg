@@ -27,6 +27,8 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
         return sa.DateTime
     elif np.issubdtype(dt, np.bool_):
         return sa.Boolean
+    elif isinstance(dt, pd.DatetimeTZDtype):
+        return sa.DateTime
     else:
         return sa.Text
 
