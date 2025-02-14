@@ -333,7 +333,7 @@ def write_dataframe_to_postgres(
 
         # --- Conditionally clean each column ---
         if sql_dtypes is None:
-            df = df.applymap(clean_value)
+            df = df.map(clean_value)
         else:
             for col in df.columns:
                 if col in skip_clean:
