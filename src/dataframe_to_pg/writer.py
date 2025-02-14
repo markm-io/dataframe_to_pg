@@ -301,11 +301,12 @@ def write_dataframe_to_postgres(
     metadata = MetaData()
     table = Table(table_name, metadata, *table_columns)
 
-    with engine.connect() as conn:
+    # Use engine.begin() to ensure that DDL commands are committed.
+    with engine.begin() as conn:
         inspector = sa.inspect(conn)
         if not inspector.has_table(table_name):
             print(f"Creating table '{table_name}' in the database.")
-            metadata.create_all(engine, tables=[table])
+            metadata.create_all(conn, tables=[table])
         else:
             # Determine which columns exist in the table.
             existing_columns = {col_info["name"] for col_info in inspector.get_columns(table_name)}
