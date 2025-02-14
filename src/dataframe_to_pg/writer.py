@@ -92,6 +92,7 @@ def write_dataframe_to_postgres(
     engine: Engine,
     table_name: str,
     dtypes: Optional[dict[str, Any]] = None,
+    sql_dtypes: Optional[dict[str, Any]] = None,
     write_method: str = "upsert",
     chunksize: Optional[Union[int, str]] = None,
     index: Optional[Union[str, list[str]]] = None,
@@ -103,8 +104,11 @@ def write_dataframe_to_postgres(
     """
     Write a DataFrame to a PostgreSQL table with conflict resolution,
     automatic addition of missing columns, optional processing in chunks,
-    and support for a custom primary key. Additionally, if clean_column_names is True,
-    returns an object with the cleaned column names.
+    and support for a custom primary key.
+
+    If `sql_dtypes` is provided then these SQLAlchemy types (one of Boolean, DateTime,
+    Float, Integer, Text, or postgresql JSON) will be used for the table columns and no
+    type inference will be performed. You cannot pass both `dtypes` and `sql_dtypes`.
 
     Parameters:
       df:
@@ -116,6 +120,10 @@ def write_dataframe_to_postgres(
       dtypes:
           Optional dictionary mapping column names (including primary key columns)
           to SQLAlchemy types. If not provided for a given column, the type is inferred.
+      sql_dtypes:
+          Optional dictionary mapping column names to SQLAlchemy types. If provided, these
+          types (which should be one of Boolean, DateTime, Float, Integer, Text, or postgresql JSON)
+          will be used for the columns without inferring. Cannot be passed alongside `dtypes`.
       write_method:
           One of the following options (default is 'upsert'):
             - 'insert': Insert rows; if the primary key(s) already exist, skip that row.
@@ -139,7 +147,7 @@ def write_dataframe_to_postgres(
           The truncate limit to pass to pyjanitors `clean_names` method (default is 55).
       yield_chunks:
           If True, yields each chunk as it is written to the database and returns, via the
-          generator's return value, a WriteResult (if clean_column_names is True) or the number
+          generator's return value, a WriteResult (if clean_column_names=True) or the number
           of non-primary key columns updated. Otherwise, the function executes all chunks and,
           if clean_column_names is True, returns a WriteResult object; if False, returns None.
 
@@ -147,14 +155,19 @@ def write_dataframe_to_postgres(
       - If yield_chunks is True, yields each chunk (as a list of dicts) and finally returns a
         WriteResult (if clean_column_names=True) or an int representing the updated columns count.
       - If yield_chunks is False and clean_column_names is True, returns a WriteResult object
-        with the updated_columns_count and the cleaned column names (accessible via `.column`).
+        with the updated_columns_count and the cleaned column names (accessible via `.columns`).
       - Otherwise, returns None.
 
     Raises:
       ValueError: If write_method is invalid, if chunksize is invalid, if a Polars
-                  DataFrame is passed without specifying the index parameter, or if
-                  column cleaning is requested but not supported.
+                  DataFrame is passed without specifying the index parameter, if
+                  column cleaning is requested but not supported, or if both `dtypes`
+                  and `sql_dtypes` are provided.
     """
+
+    # Prevent both dtypes and sql_dtypes from being provided.
+    if dtypes is not None and sql_dtypes is not None:
+        raise ValueError("Cannot pass both 'dtypes' and 'sql_dtypes'. Please provide only one.")
 
     allowed_methods = ["insert", "replace", "upsert"]
     if write_method not in allowed_methods:
@@ -216,7 +229,9 @@ def write_dataframe_to_postgres(
         # Build table columns: primary key columns first (in the order specified), then all others.
         table_columns: list[Column] = []
         for col_name in pk_names:
-            if dtypes is not None and col_name in dtypes:
+            if sql_dtypes is not None:
+                col_type = sql_dtypes.get(col_name, sa.Text)
+            elif dtypes is not None and col_name in dtypes:
                 col_type = dtypes[col_name]
             else:
                 col_type = _infer_sqlalchemy_type_from_polars_dtype(schema[col_name])
@@ -224,7 +239,9 @@ def write_dataframe_to_postgres(
         for col in df.columns:
             if col in pk_names:
                 continue
-            if dtypes is not None and col in dtypes:
+            if sql_dtypes is not None:
+                col_type = sql_dtypes.get(col, sa.Text)
+            elif dtypes is not None and col in dtypes:
                 col_type = dtypes[col]
             else:
                 col_type = _infer_sqlalchemy_type_from_polars_dtype(schema[col])
@@ -257,7 +274,9 @@ def write_dataframe_to_postgres(
 
         table_columns = []
         for col_name in pk_names:
-            if dtypes is not None and col_name in dtypes:
+            if sql_dtypes is not None:
+                col_type = sql_dtypes.get(col_name, sa.Text)
+            elif dtypes is not None and col_name in dtypes:
                 col_type = dtypes[col_name]
             else:
                 col_type = _infer_sqlalchemy_type(df[col_name])
@@ -265,7 +284,9 @@ def write_dataframe_to_postgres(
         for col in df.columns:
             if col in pk_names:
                 continue
-            if dtypes is not None and col in dtypes:
+            if sql_dtypes is not None:
+                col_type = sql_dtypes.get(col, sa.Text)
+            elif dtypes is not None and col in dtypes:
                 col_type = dtypes[col]
             else:
                 col_type = _infer_sqlalchemy_type(df[col])
@@ -350,7 +371,7 @@ def write_dataframe_to_postgres(
 
         def _generator() -> Generator[list[dict[str, Any]], None, Union[WriteResult, int]]:
             yield from _process_chunks(True)
-            # If clean_column_names was requested, return a WriteResult so that .column is available.
+            # If clean_column_names was requested, return a WriteResult so that .columns is available.
             return (
                 WriteResult(updated_columns_count, cleaned_columns or [])
                 if clean_column_names
