@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.2 (2025-02-14)
+
+### Bug fixes
+
+- Clean nan and nat values in dataframe before conversion to records ([`8b2af18`](https://github.com/markm-io/dataframe_to_pg/commit/8b2af18ef924148fa301d0517f1a262ba45398a1))
+
 ## v0.2.1 (2025-02-14)
 
 ### Bug fixes
