@@ -1,6 +1,16 @@
 # Changelog
 
+## v0.2.1 (2025-02-14)
+
+### Bug fixes
+
+- Use engine.begin() for ddl commands in writer.py to ensure proper transaction handling ([`021e00d`](https://github.com/markm-io/dataframe_to_pg/commit/021e00dc7c317525c1b7980617b835988d1e3c80))
+
 ## v0.2.0 (2025-02-14)
+
+### Bug fixes
+
+- Use engine.begin() for ddl commands in writer.py to ensure proper transaction handling ([`45cd959`](https://github.com/markm-io/dataframe_to_pg/commit/45cd959d34de20a7cf84a3723dfda34581ab4038))
 
 ### Features
 
