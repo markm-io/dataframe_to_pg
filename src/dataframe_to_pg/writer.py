@@ -18,7 +18,8 @@ class WriteResult:
     Dataclass to encapsulate the result of writing a DataFrame to PostgreSQL.
 
     Attributes:
-        updated_columns_count: Number of non-primary key columns updated (only applicable for 'replace' and 'upsert').
+        updated_columns_count: Number of non-primary key columns updated
+                               (only applicable for 'replace' and 'upsert').
         columns: The list of column names after cleaning (only provided if clean_column_names=True).
     """
 
@@ -26,12 +27,69 @@ class WriteResult:
     columns: list[str]
 
 
+def is_text_type(sql_type: Any) -> bool:
+    """
+    Helper to determine if an SQL type is (or should be) considered Text.
+    """
+    return (isinstance(sql_type, type) and issubclass(sql_type, sa.Text)) or isinstance(sql_type, sa.Text)
+
+
+def clean_value(x: Any) -> Any:
+    """
+    Convert missing values to None.
+
+    For scalar values:
+      - If x is a string that is empty (after stripping) or equals "NaT" or "nan"
+        (case-insensitive), return None.
+      - Otherwise, use pd.isna to check for missing values.
+    For non-scalars:
+      - Convert x to a NumPy array and return None if the array is empty or if all elements are missing.
+      - Otherwise, return the original value.
+    """
+    if np.isscalar(x):
+        if isinstance(x, str):
+            if x.strip() == "":
+                return None
+            if x.lower() in ("nat", "nan"):
+                return None
+        return None if pd.isna(x) else x
+    try:
+        arr = np.array(x)
+    except Exception:
+        return x
+    if arr.size == 0 or np.all(pd.isna(arr)):
+        return None
+    return x
+
+
 def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
     """
     Infer a basic SQLAlchemy type from a pandas Series dtype.
-    This mapping can be expanded as needed.
+
+    For columns with object dtype, if any non-empty string cannot be converted to float,
+    then the column is forced to be Text.
+    Also, if a numeric dtype is detected but there is at least one non-null string value, force Text.
     """
     dt = series.dtype
+
+    # If numeric but contains at least one non-null string value, force Text.
+    if pd.api.types.is_numeric_dtype(dt):
+        for v in series.dropna():
+            if isinstance(v, str):
+                return sa.Text
+
+    # If object dtype, check if any nonempty string is non-numeric.
+    if dt is object:
+        for v in series:
+            if isinstance(v, str):
+                if v.strip() != "":
+                    try:
+                        float(v)
+                    except ValueError:
+                        return sa.Text
+            elif v is not None:
+                if not isinstance(v, (int, float)):
+                    return sa.Text
 
     if isinstance(dt, pd.DatetimeTZDtype):
         return sa.DateTime(timezone=True)
@@ -46,27 +104,13 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
     elif np.issubdtype(dt, np.bool_):
         return sa.Boolean
     elif np.issubdtype(dt, np.object_) and series.apply(lambda x: isinstance(x, dict)).any():
-        return JSON  # Handle JSON type columns
+        return JSON
     else:
         return sa.Text
 
 
 def _infer_sqlalchemy_type_from_polars_dtype(pl_dtype: Any) -> type[sa.types.TypeEngine]:
-    """
-    Infer a basic SQLAlchemy type from a Polars dtype.
-    This mapping may be extended as needed.
-    """
-    # Polars integer types
-    if pl_dtype in {
-        pl.Int8,
-        pl.Int16,
-        pl.Int32,
-        pl.Int64,
-        pl.UInt8,
-        pl.UInt16,
-        pl.UInt32,
-        pl.UInt64,
-    }:
+    if pl_dtype in {pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64}:
         return sa.Integer
     # Polars floating types
     elif pl_dtype in {pl.Float32, pl.Float64}:
@@ -82,7 +126,7 @@ def _infer_sqlalchemy_type_from_polars_dtype(pl_dtype: Any) -> type[sa.types.Typ
         return sa.Text
     # Object type (assumed to be JSON)
     elif pl_dtype == pl.Object:
-        return JSON  # Handle JSON type columns
+        return JSON
     else:
         return sa.Text
 
@@ -99,7 +143,7 @@ def write_dataframe_to_postgres(
     clean_column_names: bool = False,
     case_type: str = "snake",
     truncate_limit: int = 55,
-    yield_chunks: bool = False,  # <-- If True, yields each chunk as it's written.
+    yield_chunks: bool = False,  # If True, yields each chunk as it's written.
 ) -> Union[None, WriteResult, Generator[list[dict[str, Any]], None, Union[WriteResult, int]]]:
     """
     Write a DataFrame to a PostgreSQL table with conflict resolution,
@@ -173,7 +217,7 @@ def write_dataframe_to_postgres(
     if write_method not in allowed_methods:
         raise ValueError(f"write_method must be one of {allowed_methods}, got {write_method}")
 
-    # --- Determine DataFrame type via module name ---
+    # --- Determine DataFrame type ---
     module_name = type(df).__module__
     if "polars" in module_name:
         import janitor.polars
@@ -186,27 +230,29 @@ def write_dataframe_to_postgres(
     else:
         raise ValueError("df must be either a pandas.DataFrame or a polars.DataFrame")
 
-    # --- Clean column names if requested using pyjanitors ---
+    # --- Optionally clean column names ---
     if clean_column_names:
         try:
             # This assumes that the DataFrame has the `clean_names` method (pyjanitor must be installed).
             df = df.clean_names(case_type=case_type, truncate_limit=truncate_limit)
             # Capture the cleaned column names.
             cleaned_columns = list(df.columns)
-        except AttributeError as e:
-            raise ValueError(
-                "clean_column_names requested but the DataFrame does not support clean_names. "
-                "Please ensure pyjanitor is installed and up-to-date."
-            ) from e
         except Exception as e:
-            raise ValueError("Error cleaning column names using pyjanitors: " + str(e)) from e
+            raise ValueError("Error cleaning column names: " + str(e)) from e
     else:
         cleaned_columns = None
 
-    # --- Determine primary key columns and prepare records accordingly ---
+    # Build a set of column names for which cleaning should be skipped (if sql_dtypes provided and type is text)
+    skip_clean = set()
+    if sql_dtypes is not None:
+        for col, typ in sql_dtypes.items():
+            if is_text_type(typ):
+                skip_clean.add(col)
+
     pk_names: list[str] = []
     records: list[dict[str, Any]] = []
 
+    # --- Polars branch ---
     if is_polars:
         # For Polars, the caller must supply the index parameter.
         if index is None:
@@ -229,8 +275,8 @@ def write_dataframe_to_postgres(
         # Build table columns: primary key columns first (in the order specified), then all others.
         table_columns: list[Column] = []
         for col_name in pk_names:
-            if sql_dtypes is not None:
-                col_type = sql_dtypes.get(col_name, sa.Text)
+            if sql_dtypes is not None and col_name in sql_dtypes:
+                col_type = sql_dtypes[col_name]
             elif dtypes is not None and col_name in dtypes:
                 col_type = dtypes[col_name]
             else:
@@ -239,8 +285,8 @@ def write_dataframe_to_postgres(
         for col in df.columns:
             if col in pk_names:
                 continue
-            if sql_dtypes is not None:
-                col_type = sql_dtypes.get(col, sa.Text)
+            if sql_dtypes is not None and col in sql_dtypes:
+                col_type = sql_dtypes[col]
             elif dtypes is not None and col in dtypes:
                 col_type = dtypes[col]
             else:
@@ -249,15 +295,19 @@ def write_dataframe_to_postgres(
 
         # Convert the Polars DataFrame to a list of dictionaries.
         records = df.to_dicts()
+        new_records = []
+        for record in records:
+            new_record = {}
+            for k, v in record.items():
+                if sql_dtypes is not None and k in sql_dtypes and is_text_type(sql_dtypes[k]):
+                    new_record[k] = v  # skip cleaning for text columns
+                else:
+                    new_record[k] = clean_value(v)
+            new_records.append(new_record)
+        records = new_records
 
-        # Replace any NaN values with None.
-        def _clean_record(record: dict[str, Any]) -> dict[str, Any]:
-            return {k: (None if isinstance(v, float) and pd.isna(v) else v) for k, v in record.items()}
-
-        records = [_clean_record(r) for r in records]
-
+    # --- Pandas branch ---
     else:
-        # Pandas DataFrame branch.
         if index is not None:
             if isinstance(index, str):
                 pk_names = [index]
@@ -276,13 +326,25 @@ def write_dataframe_to_postgres(
                 pk_names = [df.index.name if df.index.name is not None else "index"]
             df = df.reset_index(drop=False)
 
-        # Replace NaT and NaN with None.
-        df = df.where(pd.notnull(df), None)
+        # --- Convert datetime columns to object dtype and replace NaT with None ---
+        datetime_cols = df.select_dtypes(include=["datetime", "datetimetz"]).columns
+        for col in datetime_cols:
+            df[col] = df[col].apply(lambda x: None if pd.isna(x) else x).astype(object)
+
+        # --- Conditionally clean each column ---
+        if sql_dtypes is None:
+            df = df.applymap(clean_value)
+        else:
+            for col in df.columns:
+                if col in skip_clean:
+                    continue
+                else:
+                    df[col] = df[col].apply(clean_value)
 
         table_columns = []
         for col_name in pk_names:
-            if sql_dtypes is not None:
-                col_type = sql_dtypes.get(col_name, sa.Text)
+            if sql_dtypes is not None and col_name in sql_dtypes:
+                col_type = sql_dtypes[col_name]
             elif dtypes is not None and col_name in dtypes:
                 col_type = dtypes[col_name]
             else:
@@ -291,20 +353,48 @@ def write_dataframe_to_postgres(
         for col in df.columns:
             if col in pk_names:
                 continue
-            if sql_dtypes is not None:
-                col_type = sql_dtypes.get(col, sa.Text)
+            if sql_dtypes is not None and col in sql_dtypes:
+                col_type = sql_dtypes[col]
             elif dtypes is not None and col in dtypes:
                 col_type = dtypes[col]
             else:
                 col_type = _infer_sqlalchemy_type(df[col])
             table_columns.append(Column(col, col_type))
-
-        # Reorder the DataFrame columns to match the table definition.
-        expected_columns: list[str] = [col.name for col in table_columns]
+        expected_columns = [col.name for col in table_columns]
         df = df[expected_columns]
         records = df.to_dict(orient="records")
+        # --- Extra post-processing ---
+        if sql_dtypes is None:
+            for record in records:
+                for key, value in record.items():
+                    try:
+                        is_na = pd.isna(value)
+                    except Exception:
+                        is_na = False
+                    if isinstance(is_na, np.ndarray):
+                        if is_na.size > 0 and np.all(is_na):
+                            record[key] = None
+                    else:
+                        if is_na:
+                            record[key] = None
+        else:
+            for record in records:
+                for key, value in record.items():
+                    if key in skip_clean:
+                        continue
+                    else:
+                        try:
+                            is_na = pd.isna(value)
+                        except Exception:
+                            is_na = False
+                        if isinstance(is_na, np.ndarray):
+                            if is_na.size > 0 and np.all(is_na):
+                                record[key] = None
+                        else:
+                            if is_na:
+                                record[key] = None
 
-    # --- Create the SQLAlchemy Table object and update (or create) the schema in Postgres ---
+    # --- Create or update the table schema in PostgreSQL ---
     metadata = MetaData()
     table = Table(table_name, metadata, *table_columns)
 
@@ -349,7 +439,7 @@ def write_dataframe_to_postgres(
         len([col for col in table.columns if col.name not in pk_names]) if write_method in ["replace", "upsert"] else 0
     )
 
-    # --- Execute the INSERT statement, processing records in chunks if requested ---
+    # --- Process records in chunks if requested ---
     if chunksize is not None:
         if isinstance(chunksize, str):
             if chunksize.lower() == "auto":
@@ -379,7 +469,6 @@ def write_dataframe_to_postgres(
 
         def _generator() -> Generator[list[dict[str, Any]], None, Union[WriteResult, int]]:
             yield from _process_chunks(True)
-            # If clean_column_names was requested, return a WriteResult so that .columns is available.
             return (
                 WriteResult(updated_columns_count, cleaned_columns or [])
                 if clean_column_names
