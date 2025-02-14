@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.0 (2025-02-14)
+
+### Features
+
+- Add sql_dtypes parameter to writer function for explicit sqlalchemy type usage ([`c7f6afb`](https://github.com/markm-io/dataframe_to_pg/commit/c7f6afb9ca97a65d78a2a5614ff6c4e2f3451300))
+
 ## v0.1.14 (2025-02-14)
 
 ### Bug fixes
