@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.0 (2025-02-14)
+
+### Features
+
+- Add functions to clean values and determine text types in dataframe processing ([`dc2f26c`](https://github.com/markm-io/dataframe_to_pg/commit/dc2f26ca542dc1324f1033d58e02e6becdaccde4))
+
 ## v0.2.2 (2025-02-14)
 
 ### Bug fixes
