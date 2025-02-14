@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.1 (2025-02-14)
+
+### Bug fixes
+
+- Change dataframe cleaning method from applymap to map for improved performance ([`2bfee02`](https://github.com/markm-io/dataframe_to_pg/commit/2bfee023bb444da21985e0edbf587ea85052a464))
+
 ## v0.3.0 (2025-02-14)
 
 ### Features
