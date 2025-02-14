@@ -107,7 +107,7 @@ def write_dataframe_to_postgres(
     and support for a custom primary key.
 
     If `sql_dtypes` is provided then these SQLAlchemy types (one of Boolean, DateTime,
-    Float, Integer, Text, or postgresql JSON) will be used for the table columns and no
+    Float, Integer, Text, or postgresql JSON) will be used for the columns and no
     type inference will be performed. You cannot pass both `dtypes` and `sql_dtypes`.
 
     Parameters:
@@ -247,7 +247,14 @@ def write_dataframe_to_postgres(
                 col_type = _infer_sqlalchemy_type_from_polars_dtype(schema[col])
             table_columns.append(Column(col, col_type))
 
+        # Convert the Polars DataFrame to a list of dictionaries.
         records = df.to_dicts()
+
+        # Replace any NaN values with None.
+        def _clean_record(record: dict[str, Any]) -> dict[str, Any]:
+            return {k: (None if isinstance(v, float) and pd.isna(v) else v) for k, v in record.items()}
+
+        records = [_clean_record(r) for r in records]
 
     else:
         # Pandas DataFrame branch.
@@ -269,8 +276,8 @@ def write_dataframe_to_postgres(
                 pk_names = [df.index.name if df.index.name is not None else "index"]
             df = df.reset_index(drop=False)
 
-        # Replace NaT with None using the replace method.
-        df = df.replace({pd.NaT: None})
+        # Replace NaT and NaN with None.
+        df = df.where(pd.notnull(df), None)
 
         table_columns = []
         for col_name in pk_names:
