@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.1.14 (2025-02-14)
+
+### Bug fixes
+
+- Update type determination for int64dtype in writer.py to return integer type ([`613bf72`](https://github.com/markm-io/dataframe_to_pg/commit/613bf72c2769254efdacc52257fb2f32e713d2d3))
+
+### Documentation
+
+- Add documentation for dataframe_to_pg package and its writer module ([`0767b19`](https://github.com/markm-io/dataframe_to_pg/commit/0767b196e30b63179ad38876e9897228fd2ca7c7))
+
 ## v0.1.13 (2025-02-13)
 
 ### Bug fixes
