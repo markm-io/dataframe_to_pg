@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy import Column, MetaData, Table, text
 from sqlalchemy.dialects.postgresql import JSON, insert
 from sqlalchemy.engine import Engine
+from tqdm import tqdm
 
 
 @dataclass
@@ -144,6 +145,7 @@ def write_dataframe_to_postgres(
     case_type: str = "snake",
     truncate_limit: int = 55,
     yield_chunks: bool = False,  # If True, yields each chunk as it's written.
+    progress_bar: bool = True,
 ) -> Union[None, WriteResult, Generator[list[dict[str, Any]], None, Union[WriteResult, int]]]:
     """
     Write a DataFrame to a PostgreSQL table with conflict resolution,
@@ -194,6 +196,8 @@ def write_dataframe_to_postgres(
           generator's return value, a WriteResult (if clean_column_names=True) or the number
           of non-primary key columns updated. Otherwise, the function executes all chunks and,
           if clean_column_names is True, returns a WriteResult object; if False, returns None.
+      progress_bar:
+            If True, displays a progress bar for the operation. This is only applicable if
 
     Returns:
       - If yield_chunks is True, yields each chunk (as a list of dicts) and finally returns a
@@ -459,7 +463,8 @@ def write_dataframe_to_postgres(
     # Define an inner function that processes the chunks.
     def _process_chunks(yield_results: bool) -> Generator[list[dict[str, Any]], None, None]:
         with engine.begin() as conn:
-            for chunk in chunks:
+            chunk_iter = tqdm(chunks, desc=f"Writing to {table_name} table", disable=not progress_bar)
+            for chunk in chunk_iter:
                 conn.execute(stmt, chunk)
                 if yield_results:
                     yield chunk
