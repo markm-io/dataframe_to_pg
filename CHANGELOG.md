@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.0 (2025-03-07)
+
+### Features
+
+- Add tqdm progress bar support for dataframe writing to postgressql ([`0f6427f`](https://github.com/markm-io/dataframe_to_pg/commit/0f6427f7b9b0bda357f638f6b274ec9cf45326c6))
+
 ## v0.3.1 (2025-02-14)
 
 ### Bug fixes
