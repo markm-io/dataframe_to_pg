@@ -416,7 +416,7 @@ def write_dataframe_to_postgres(
             for col_name in missing_columns:
                 col_obj = table.columns[col_name]
                 col_type_str = col_obj.type.compile(dialect=engine.dialect)
-                alter_stmt = f'ALTER TABLE {table_name} ADD COLUMN "{col_name}" {col_type_str}'
+                alter_stmt = f'ALTER TABLE "{table_name}" ADD COLUMN "{col_name}" {col_type_str}'
                 conn.execute(text(alter_stmt))
 
     # --- Build the INSERT statement with conflict handling ---
