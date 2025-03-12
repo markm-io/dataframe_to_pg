@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.1 (2025-03-12)
+
+### Bug fixes
+
+- Correct table name quoting in alter table statement ([`f5a222a`](https://github.com/markm-io/dataframe_to_pg/commit/f5a222a20c46e37f486fd5f6b82d11e46506f66c))
+
 ## v0.4.0 (2025-03-07)
 
 ### Features
