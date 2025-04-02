@@ -8,7 +8,7 @@ import pandas as pd
 import polars as pl
 import sqlalchemy as sa
 from sqlalchemy import Column, MetaData, Table, text
-from sqlalchemy.dialects.postgresql import JSON, insert
+from sqlalchemy.dialects.postgresql import ARRAY, JSON, insert
 from sqlalchemy.engine import Engine
 from tqdm import tqdm
 
@@ -48,18 +48,37 @@ def clean_value(x: Any) -> Any:
       - Otherwise, return the original value.
     """
     if np.isscalar(x):
-        if isinstance(x, str):
-            if x.strip() == "":
-                return None
-            if x.lower() in ("nat", "nan"):
-                return None
-        return None if pd.isna(x) else x
-    try:
-        arr = np.array(x)
-    except Exception:
+        if isinstance(x, str) and (x.strip() == "" or x.lower() in ("nat", "nan")):
+            return None
+        if pd.isna(x):
+            return None
         return x
-    if arr.size == 0 or np.all(pd.isna(arr)):
-        return None
+
+    # Handle list/array-like structures
+    if isinstance(x, (list, np.ndarray)):
+        if len(x) == 0:
+            return None
+
+        # Convert NumPy arrays to Python lists for PostgreSQL compatibility
+        if isinstance(x, np.ndarray):
+            # Handle special case of structured arrays or record arrays
+            if x.dtype.names is not None:
+                return [dict(zip(x.dtype.names, item)) for item in x]
+
+            # Convert to Python native types
+            return x.tolist()
+
+        # Clean individual elements within the list
+        return [clean_value(item) for item in x]
+
+    # For non-scalar, non-array objects (like dicts, custom objects, etc.)
+    try:  # type: ignore[unreachable]
+        arr = np.array(x)
+        if arr.size == 0 or np.all(pd.isna(arr)):
+            return None
+    except Exception:  # noqa: S110
+        pass
+
     return x
 
 
@@ -67,11 +86,33 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
     """
     Infer a basic SQLAlchemy type from a pandas Series dtype.
 
-    For columns with object dtype, if any non-empty string cannot be converted to float,
-    then the column is forced to be Text.
-    Also, if a numeric dtype is detected but there is at least one non-null string value, force Text.
+    Handles arrays by detecting list/array-like objects and determining their element type.
     """
     dt = series.dtype
+
+    # Check if the series contains arrays/lists
+    contains_array = False
+    element_type = None
+
+    for v in series.dropna():
+        if isinstance(v, (list, np.ndarray)):
+            contains_array = True
+            # Try to determine element type from non-empty arrays
+            if len(v) > 0:
+                sample = v[0]
+                if isinstance(sample, bool):
+                    element_type = sa.Boolean
+                elif isinstance(sample, int):
+                    element_type = sa.Integer
+                elif isinstance(sample, float):
+                    element_type = sa.Float
+                elif isinstance(sample, str):
+                    element_type = sa.Text
+                break
+
+    if contains_array:
+        # Default to Text array if element type couldn't be determined
+        return ARRAY(element_type or sa.Text)
 
     # If numeric but contains at least one non-null string value, force Text.
     if pd.api.types.is_numeric_dtype(dt):
@@ -79,7 +120,7 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
             if isinstance(v, str):
                 return sa.Text
 
-    # If object dtype, check if any nonempty string is non-numeric.
+    # Original type inference logic...
     if dt is object:
         for v in series:
             if isinstance(v, str):
@@ -111,21 +152,36 @@ def _infer_sqlalchemy_type(series: pd.Series) -> type[sa.types.TypeEngine]:
 
 
 def _infer_sqlalchemy_type_from_polars_dtype(pl_dtype: Any) -> type[sa.types.TypeEngine]:
+    # Check for list type in Polars
+    if str(pl_dtype).startswith("List["):
+        # Extract inner type from List[type]
+        inner_type_str = str(pl_dtype)[5:-1]
+
+        # Map inner type to SQLAlchemy type
+        if inner_type_str in {"Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"}:
+            return ARRAY(sa.Integer)
+        elif inner_type_str in {"Float32", "Float64"}:
+            return ARRAY(sa.Float)
+        elif inner_type_str == "Boolean":
+            return ARRAY(sa.Boolean)
+        elif inner_type_str in {"Datetime", "Date"}:
+            return ARRAY(sa.DateTime)
+        elif inner_type_str == "Utf8":
+            return ARRAY(sa.Text)
+        else:
+            return ARRAY(sa.Text)
+
+    # Original type inference logic...
     if pl_dtype in {pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64}:
         return sa.Integer
-    # Polars floating types
     elif pl_dtype in {pl.Float32, pl.Float64}:
         return sa.Float
-    # Boolean type
     elif pl_dtype == pl.Boolean:
         return sa.Boolean
-    # Datetime or Date types
     elif pl_dtype in {pl.Datetime, pl.Date}:
         return sa.DateTime
-    # Utf8 (string) type
     elif pl_dtype == pl.Utf8:
         return sa.Text
-    # Object type (assumed to be JSON)
     elif pl_dtype == pl.Object:
         return JSON
     else:
