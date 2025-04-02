@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0 (2025-04-02)
+
+### Features
+
+- Enhance array handling and type inference for postgresql compatibility ([`f13e613`](https://github.com/markm-io/dataframe_to_pg/commit/f13e613c4396fad6c94038abbf88c1fd6883768a))
+
 ## v0.4.1 (2025-03-12)
 
 ### Bug fixes
