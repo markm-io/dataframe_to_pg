@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.0 (2025-04-04)
+
+### Features
+
+- Add json handling for dictionary types in writer.py ([`94e12b7`](https://github.com/markm-io/dataframe_to_pg/commit/94e12b7b671f1fb79f9bcd080f8747b88bf5ca76))
+
 ## v0.6.0 (2025-04-04)
 
 ### Features
