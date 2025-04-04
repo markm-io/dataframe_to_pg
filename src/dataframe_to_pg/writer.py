@@ -1,3 +1,4 @@
+import json
 import math
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -53,6 +54,11 @@ def clean_value(x: Any) -> Any:
         if pd.isna(x):
             return None
         return x
+
+    # Handle dictionaries for JSON columns
+    if isinstance(x, dict):
+        # Keep dictionaries as-is for JSON columns
+        return json.dumps(x)
 
     # Handle list/array-like structures
     if isinstance(x, (list, np.ndarray)):
