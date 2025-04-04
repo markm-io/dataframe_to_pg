@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.0 (2025-04-04)
+
+### Features
+
+- Update typing-extensions to 4.13.1 and switch json to jsonb in writer.py ([`0d6e3ee`](https://github.com/markm-io/dataframe_to_pg/commit/0d6e3ee2ebdfaea904d62664a272e03717a8d940))
+
 ## v0.5.0 (2025-04-02)
 
 ### Features
